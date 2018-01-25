@@ -19,6 +19,7 @@ from keras.utils import plot_model
 from sklearn.model_selection import train_test_split
 from preprocessing import get_ids_and_files_in_dir, percentile_remove_outlier, MinMaxScaler, NormalDistributionScaler, binning_date_y
 import os
+from matplotlib import pyplot as plt
 
 # (global) variable definition here
 file_sets = [
@@ -78,7 +79,10 @@ select_load_columns = ['2080020', '2080021', '2080022', '2080023', '2080024', '2
                        '2080049', '2080050', '2080051', '2080052', '2080053', '2080054', 
                        '2080055', '2080056', '2080057', '2080058', '2080059', '2080060', 
                        '2080061', '2080062', '2080063', '2080064', '2080065', 'LoadScore', 
+                       'PerfScore',
                        ]
+
+select_load_columns_one = ['LoadScore',]
 
 select_perf_columns = ['2080020', '2080021', '2080022', '2080023', '2080024', '2080025', 
                        '2080026', '2080027', '2080028', '2080029', '2080030', '2080031', 
@@ -86,13 +90,84 @@ select_perf_columns = ['2080020', '2080021', '2080022', '2080023', '2080024', '2
                        '2080043', '2080044', '2080045', '2080046', '2080047', '2080048', 
                        '2080049', '2080050', '2080051', '2080052', '2080053', '2080054', 
                        '2080055', '2080056', '2080057', '2080058', '2080059', '2080060', 
-                       '2080061', '2080062', '2080063', '2080064', '2080065', 'PerfScore',
+                       '2080061', '2080062', '2080063', '2080064', '2080065', 'LoadScore', 
+                       'PerfScore',
                        ]
 
+select_perf_columns_one = ['PerfScore',]
 
-lookback = 10
+num_episodes = 500
 
 # class definition here
+
+class EpisodeHistory:
+    def __init__(self,
+                 capacity,
+                 title = "...",
+                 ylabel = "...",
+                 xlabel="...",
+                 verbose = True,
+                 plot_episode_count=num_episodes,
+                 max_value_per_episode=1.2,
+                 num_plot=1,
+                 label=["0","1","2","3"]):
+
+        self.datas = {}
+        for i in range(num_plot):
+            self.datas[i] = np.zeros(capacity, dtype=float)
+        
+        self.plot_episode_count = plot_episode_count
+        self.max_value_per_episode = max_value_per_episode
+        self.label = label
+        
+        self.num_plot = num_plot 
+        self.point_plot = {}
+        self.fig = None
+        self.ax = None
+        self.verbose = verbose
+        self.title = title
+        self.xlabel = xlabel
+        self.ylabel = ylabel
+        
+        self.fig, self.ax = plt.subplots(figsize=(14, 7), facecolor='w', edgecolor='k')
+        self.fig.canvas.set_window_title(self.title)
+        
+        self.ax.set_xlim(0, self.plot_episode_count + 5)
+        self.ax.set_ylim(0, self.max_value_per_episode)
+        self.ax.yaxis.grid(True)
+        
+        self.ax.set_title(self.title)
+        self.ax.set_xlabel(self.xlabel)
+        self.ax.set_ylabel(self.ylabel)
+        
+        color_set = ['b', 'g', 'r', 'c']
+        for i in range(num_plot):
+            self.point_plot[i] = plt.plot([], [], linewidth=2.0, c=color_set[i], label=self.label[i])
+
+    def __getitem__(self, index):
+        return self.datas[index]
+
+    def __setitem__(self, index, value):
+        self.datas[index] = value
+
+    def update_plot(self, episode_index):
+        plot_right_edge = episode_index
+        plot_left_edge = max(0, plot_right_edge - self.plot_episode_count)
+
+        # Update point plot.
+        for i in range(self.num_plot):
+            x = range(plot_left_edge, plot_right_edge)
+            y = self.datas[i][plot_left_edge:plot_right_edge]
+            self.point_plot[i][0].set_xdata(x)
+            self.point_plot[i][0].set_ydata(y)
+            self.ax.set_xlim(plot_left_edge, plot_left_edge + self.plot_episode_count)
+
+        # Repaint the surface.
+        plt.legend()
+        plt.draw()
+        plt.pause(0.0001)
+        
+        
 class NeuralNetwork():
     def __init__(self,
                  model_save_dir,
@@ -140,13 +215,13 @@ class NeuralNetwork():
         self.dense_layer = kwargs.get('dense_layer', 2)  # at least 2 layers
         self.lstm_layer = kwargs.get('lstm_layer', 2) # at least 2 layers
         self.drop_out = kwargs.get('drop_out', 0.2)
-        self.nb_epoch = kwargs.get('nb_epoch', 500)
+        self.nb_epoch = kwargs.get('nb_epoch', num_episodes)
         self.batch_size = kwargs.get('batch_size', 10000)
         self.loss = kwargs.get('loss', 'categorical_crossentropy')
         self.optimizer = kwargs.get('optimizer', 'rmsprop')
 
 
-    def NN_model_train(self, trainX, trainY, testX, testY, model_save_path, end):
+    def NN_model_train(self, trainX, trainY, testX, testY, model_save_path, end, lookback):
         """
         :param trainX: training data set
         :param trainY: expect value of training data
@@ -181,7 +256,22 @@ class NeuralNetwork():
         # configure the learning process
         model.compile(loss=self.loss, optimizer=self.optimizer, metrics=['accuracy'])
         # train the model with fixed number of epoches
-        model.fit(x=trainX, y=trainY, nb_epoch=self.nb_epoch, batch_size=self.batch_size, validation_data=(testX, testY))
+        h = model.fit(x=trainX, y=trainY, nb_epoch=self.nb_epoch, batch_size=self.batch_size, validation_data=(testX, testY))
+        
+        num_plot = 4
+        
+        trace = EpisodeHistory(num_episodes,
+                               num_plot=num_plot,
+                               title = "Training hisotry plot",
+                               ylabel = "accuracy or loss",
+                               xlabel= "Training epochs",
+                               label=list(h.history.keys())
+                               )
+        for i, key in enumerate(h.history.keys()):
+            trace[i][:] = h.history[key]
+        trace.update_plot(num_episodes)
+        trace.fig.savefig(fname="../../plot/training_history_plot/lookback-" + str(lookback) +"-lstm-traning-history.png")
+        
         if end:
             model.summary()
             plot_model(model, to_file='model.png')
@@ -202,7 +292,7 @@ class NeuralNetwork():
         return predict_class, class_prob
 
 
-    def model_train_predict_test(self, dataX, dataY, file_name, end, override=False):      
+    def model_train_predict_test(self, dataX, dataY, end,  lookback, override=False,):      
         # remove outlier records
         """
         df_selected = percentile_remove_outlier(df_selected, filter_start=0, filter_end=1+self.training_set_length)
@@ -234,8 +324,8 @@ class NeuralNetwork():
         # format train, test, validation data
         count = 0
         while True:
-            sub_train, val_train, sub_test, val_test = train_test_split(dataX, y_dummy_label, test_size=self.test_size)
-            train_x, test_x, train_y, test_y = train_test_split(sub_train, sub_test, test_size=self.test_size)
+            x_sub, x_test, y_sub, y_test = train_test_split(dataX, y_dummy_label, test_size=self.test_size)
+            x_train, x_val, y_train, y_val = train_test_split(x_sub, y_sub, test_size=self.test_size)
             if count == 10:
                 return (1010,[1010,1010])
             def to_list(x):
@@ -246,22 +336,22 @@ class NeuralNetwork():
                         result += x[i][j] * (j + 1)
                     to_list.append(result)
                 return to_list
-            if len(set(to_list(train_y))) > 1 :
+            if len(set(to_list(y_train))) > 1 :
                 break;
         # create and fit the NN model
         model_save_path = self.model_save_dir + "/" + self.model_file_prefix + "-" + ".h5"
         # check if model file exists
         if not os.path.exists(model_save_path) or override:
-            score = self.NN_model_train(train_x, train_y, test_x, test_y, model_save_path=model_save_path, end=end)
+            score = self.NN_model_train(x_train, y_train, x_val, y_val, model_save_path=model_save_path, end=end, lookback=lookback)
             print ("Models and their parameters are stored in {}".format(model_save_path))
         else:
             score = [1010, 1010]
         # generate prediction for training
         print ("Predicting the output of validation set...")           
-        val_predict_class, val_predict_prob = self.NN_prediction(val_train, model_save_path=model_save_path)
+        val_predict_class, val_predict_prob = self.NN_prediction(x_test, model_save_path=model_save_path)
         # statistic of discrepancy between expected value and real value
         total_sample_count = len(val_predict_class)
-        val_test_label = np.asarray([list(x).index(1) for x in val_test])
+        val_test_label = np.asarray([list(x).index(1) for x in y_test])
         match_count = (np.asarray(val_predict_class) == np.asarray(val_test_label.ravel())).sum()
         return float(match_count) / total_sample_count, score
 
@@ -307,11 +397,11 @@ def transform(data):
                     data[j][i] = mean
     return data
 
-def lstm_predict(dataX, dataY, file_name, end):
+def lstm_predict(dataX, dataY, end, lookback):
     output_dir = "./cluster_lstm_model"                                        # "/your_local_path/RNN_prediction_2/cluster_lstm_model"
     training_set_length = 50
     dense_layer = 2
-    model_file_prefix = 'model' + '-' + file_name
+    model_file_prefix = 'model-' + "lookback-" + str(lookback) + '-' 
     model_save_dir = output_dir + "/" + model_file_prefix
     obj_NN = NeuralNetwork(output_dir=output_dir,
                            model_save_dir=model_save_dir,
@@ -319,41 +409,68 @@ def lstm_predict(dataX, dataY, file_name, end):
                            training_set_length=training_set_length,
                            dense_layer=dense_layer)
     print ("Train NN model and test!")
-    return obj_NN.model_train_predict_test(dataX, dataY, file_name, end=end, override=False)
+    return obj_NN.model_train_predict_test(dataX, dataY, end=end, override=False, lookback=lookback)
 
 # main program here
 if __name__ == '__main__':
-    evaluate_train = np.zeros( (len(file_sets), 2) )
-    evaluate_test = np.zeros(len(file_sets))
-    sets = file_one # file_sets
-    for turn,file in enumerate(sets):
-        db = pd.read_csv('../../csv/' + file + '.csv')
-        print('open file ../../csv/' + file + '.csv')
-        # Imputation of missing values
-        db_values = db.values
-        instance_db = db_values[:, 4 : -4]
-        for i in range(instance_db.shape[0]):
-            for j in range(instance_db.shape[1]):
-                # process the null
-                if instance_db[i][j] == 'null':
-                    # assign NaN to null for future process
-                    instance_db[i][j] = np.nan
-        transform(instance_db)
-        db_values[:, 4 : -4] = instance_db
-        db = pd.DataFrame(db_values, columns = db.columns)
+    sets = file_sets # file_one
+    
+    lookback_set = list(range(3, 16, 1))
+
+    evaluate = np.zeros( (len(lookback_set), 3) )
+
+    for loop,lookback in enumerate(lookback_set):
         
-        # performance predicrt
-        dataset_perf = db[select_perf_columns].values
-        dataX, dataY = create_interval_dataset(dataset_perf, lookback)
+        for turn,file in enumerate(sets):
+            db = pd.read_csv('../../csv/' + file + '.csv')
+            print('open file ../../csv/' + file + '.csv')
+            # Imputation of missing values
+            db_values = db.values
+            instance_db = db_values[:, 4 : -4]
+            for i in range(instance_db.shape[0]):
+                for j in range(instance_db.shape[1]):
+                    # process the null
+                    if instance_db[i][j] == 'null':
+                        # assign NaN to null for future process
+                        instance_db[i][j] = np.nan
+            transform(instance_db)
+            db_values[:, 4 : -4] = instance_db
+            db = pd.DataFrame(db_values, columns = db.columns)
+            
+            # performance predicrt
+            dataset_perf = db[select_perf_columns].values
+            X_sub, Y_sub = create_interval_dataset(dataset_perf, lookback)
+            if turn == 0:
+                dataX, dataY = X_sub, Y_sub
+            else:
+                dataX = np.vstack( (dataX, X_sub) )
+                dataY = np.append(dataY, Y_sub)
+        end = True # if turn == len(sets) - 1 else False
+        precision, score = lstm_predict(dataX, dataY, end=end, lookback=lookback)
         
-        end = True if turn == len(file_sets) - 1 else False
-        precision, score = lstm_predict(dataX, dataY, file, end=end)
-        evaluate_train[turn,:] = score
-        evaluate_test[turn] = precision
-        print('The evaluateresult of ' + file + '.csv')
-        print ("Precision using validation dataset is {}".format(precision))
-        print ("Model evaluation: {}".format(score))
+
+        evaluate[loop,:] = score + [precision,]
+
         
+        print ("Model evaluation [training loss, training prescision] : {}".format(score))
+        print ("Precision using test dataset is {}".format(precision))
+        
+    num_plot = 3
+    
+    labels = ["tran_loss", "tran_acc", "acc"]
+    
+    trace = EpisodeHistory(len(lookback_set),
+                           num_plot=num_plot,
+                           title = "Test accuracy plot",
+                           ylabel = "accuracy or loss",
+                           xlabel= "lookback number",
+                           label=labels
+                           )
+    for i in range(len(labels)):
+        trace[i][:] = list(evaluate[:,i])
+    trace.update_plot(len(lookback_set))
+    trace.fig.savefig(fname="../../plot/training_select_lookback/history.png")
+    
         
         
         
