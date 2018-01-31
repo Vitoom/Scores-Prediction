@@ -9,6 +9,7 @@ This is a temporary script file.
 # import your module here
 
 import numpy as np
+np.random.seed(12345)
 import pandas as pd
 from sklearn.linear_model import LassoCV
 from sklearn.cross_validation import train_test_split
@@ -32,6 +33,10 @@ from collections import Counter
 import seaborn as sbn
 import os
 import pickle as pkl
+from time import time
+from scipy import stats
+import statsmodels.api as sm
+from statsmodels.distributions.mixture_rvs import mixture_rvs
 
 # (global) variable definition here
 
@@ -59,7 +64,7 @@ file_sets = [
         'DBID(2768077198)_INSTID(1)','DBID(770699067)_INSTID(1)',
         'DBID(2778659381)_INSTID(1)','DBID(929227073)_INSTID(1)',
         'DBID(2778659381)_INSTID(2)','DBID(942093433)_INSTID(1)',
-        'DBID(2802676787)_INSTID(1)','DBID(998852395)_INSTID(1)'
+        'DBID(2802676787)_INSTID(1)','DBID(998852395)_INSTID(1)',
         ]
 
 file_one = ['DBID(1624869053)_INSTID(1)','DBID(3204204681)_INSTID(1)',]
@@ -67,12 +72,12 @@ file_one = ['DBID(1624869053)_INSTID(1)','DBID(3204204681)_INSTID(1)',]
 file_all = ["all_data"]
 
 select_load = ['2080020','2080021','2080022','2080023','2080024','2080025','2080026',\
-                  '2080027','2080028','2080029','2080030','2080031','2080032','2080033','2080034']
+               '2080027','2080028','2080029','2080030','2080031','2080032','2080033','2080034']
 
 select_perf = ['2080040','2080041','2080042','2080043','2080044','2080045','2080046',\
                '2080047','2080048','2080049','2080050','2080051','2080052','2080053',\
                '2080054','2080055','2080056','2080057','2080058','2080059','2080060',\
-                                       '2080061','2080062','2080063','2080064','2080065'] 
+               '2080061','2080062','2080063','2080064','2080065'] 
 
 feature = ['2080020', '2080021','2080022', '2080023', '2080024', '2080025', 
            '2080026', '2080027','2080028', '2080029', '2080030', '2080031', 
@@ -85,6 +90,18 @@ feature = ['2080020', '2080021','2080022', '2080023', '2080024', '2080025',
 global db
 
 global denominator
+
+control = "all"
+
+columns_time = ["feature_percentage", "method", "feature_selection", "time(s)",]
+df_time_load_cla = pd.DataFrame(columns=columns_time)
+df_time_load_regr = pd.DataFrame(columns=columns_time)
+df_time_perf_cla = pd.DataFrame(columns=columns_time)
+df_time_perf_regr = pd.DataFrame(columns=columns_time)
+
+columns_mse = ["feature_percentage", "regr_method", "feature_select", "mse",]
+df_mse_load_regr = pd.DataFrame(columns=columns_mse)
+df_mse_perf_regr = pd.DataFrame(columns=columns_mse)
 
 # class definition here
 
@@ -117,7 +134,7 @@ def pearson(X,y):
 def feature_selection(method,instance_db,target,percentage):
     instance_db_values = instance_db.values
     if method == "lasso":
-        lassocv = LassoCV(max_iter=5000, normalize=True,alphas = [0.0001])
+        lassocv = LassoCV(max_iter=5000, normalize=True, alphas = [0.0001])
         lassocv.fit(instance_db_values,target)
         
         
@@ -177,29 +194,38 @@ def feature_selection(method,instance_db,target,percentage):
     return feature_selected
 
 # regression 
-def regression(training_data, scores):
+def regression(training_data, scores, para_mlp=4):
     # train sets and test sets split
     X_train, X_test, y_train, y_test = train_test_split(training_data, scores, test_size=0.2)
     
     # linear regression
+    start = time()
     linear = linear_model.LinearRegression()
     linear.fit(X_train,pd.DataFrame(y_train).astype(float))
     linear_result = list(linear.predict(X_test))
+    stop = time()
+    time_linear = stop - start
     
     # Support Vector Regression
+    start = time()
     svr = svm.SVR(kernel = 'linear')
     svr.fit(X_train,pd.DataFrame(y_train).astype(float))
     svr_result = list(svr.predict(X_test))
+    stop = time()
+    time_svr = stop - start
     
     # Multi-layer Perceptron
-    mlp = MLPRegressor(solver='adam', alpha=1e-5, hidden_layer_sizes=(10,10,10,10), max_iter=300)
+    start = time()
+    mlp = MLPRegressor(solver='adam', alpha=1e-5, hidden_layer_sizes=(10,)*para_mlp, max_iter=1000)
     mlp.fit(X_train,pd.DataFrame(y_train).astype(float))
     mlp_result = list(mlp.predict(X_test))
+    stop = time()
+    time_mlp = stop - start
   
-    return linear_result, svr_result, mlp_result, list(y_test)
+    return linear_result, svr_result, mlp_result, list(y_test), time_linear, time_svr, time_mlp
 
 # classification
-def classification(training_data, levels):
+def classification(training_data, levels, para_rf=5, para_mlpc=4):
     # train sets and test sets split
     while True:
         X_train, X_test, y_train, y_test = train_test_split(training_data, levels, test_size=0.2)
@@ -207,26 +233,38 @@ def classification(training_data, levels):
             break;
     
     # support vector classification
+    start = time()
     _svm = svm.SVC(kernel = 'linear')
     _svm.fit(X_train,pd.DataFrame(y_train).astype(int))  
     svm_result = list(_svm.predict(X_test))
+    stop = time()
+    time_svm = stop - start
     
     # logistic regression
+    start = time()
     logistic = LogisticRegression()
     logistic.fit(X_train,pd.DataFrame(y_train).astype(int))
     log_result = list(logistic.predict(X_test))
+    stop = time()
+    time_log = stop - start
     
     # Extremely Randomized Trees
-    rf = RandomForestClassifier(n_estimators = 10, max_features = 'log2')
+    start = time()
+    rf = RandomForestClassifier(n_estimators = para_rf, max_features = 'log2')
     rf.fit(X_train,pd.DataFrame(y_train).astype(int).values)
     rf_result = list(rf.predict(X_test))
+    stop = time()
+    time_rf = stop - start
     
     # Multi-layer Perceptron classifier
-    mlp = MLPClassifier(solver='adam', alpha=1e-5, hidden_layer_sizes=(10,10,10,10), max_iter=300)
+    start = time()
+    mlp = MLPClassifier(solver='adam', alpha=1e-5, hidden_layer_sizes=(10,)*para_mlpc, max_iter=1000)
     mlp.fit(X_train,pd.DataFrame(y_train).astype(int))
     mlp_result = list(mlp.predict(X_test))
+    stop = time()
+    time_mlpc = stop - start
     
-    return svm_result, log_result, rf_result, mlp_result, list(y_test)
+    return svm_result, log_result, rf_result, mlp_result, list(y_test), time_svm, time_log, time_rf, time_mlpc
 
 # plot histograph
 def plot_hist(vector,size,xlabel,ylabel,_bins,filename,_rwidth,method="normal"):
@@ -257,7 +295,7 @@ def to_csv(table,filename):
     table = pd.DataFrame(table)
     table.to_csv(path_or_buf='../csv/'+filename+'.csv')
 
-# regeression valuate
+# regeression valuatedf_time[df_time.shape[0]] = [feature_percentage, "svm", "None", time_svm]
 def regression_valuate(y_pred,y_true):
     r2 = r2_score(y_true, y_pred)
     mse = mean_absolute_error(y_true, y_pred)
@@ -266,6 +304,10 @@ def regression_valuate(y_pred,y_true):
 # main method
 def run_method(feature_percentage, run_turn):
     global db
+    
+    global df_time_load_cla, df_time_load_regr, df_time_perf_cla, df_time_perf_regr
+    
+    global df_mse_load_regr, df_mse_perf_regr
     
     scores_load_aggre = []
     levels_load_aggre = []
@@ -331,7 +373,7 @@ def run_method(feature_percentage, run_turn):
                        "lasso":[],
                        "pearson":[],
                        "reliefF":[],
-                        }
+                        } 
     
     y_test_cla_predict_perf = {"svm_un":[],
                                "svm_lasso":[],
@@ -350,6 +392,7 @@ def run_method(feature_percentage, run_turn):
                                "mlpC_pearson":[],
                                "mlpC_reliefF":[],
                                }
+    
     y_test_cla_perf = {"None":[],
                        "lasso":[],
                        "pearson":[],
@@ -360,18 +403,24 @@ def run_method(feature_percentage, run_turn):
                            "pearson":{},
                            "reliefF":{},
                            }
+    
     feature_select_perf = {"lasso":{},
                            "pearson":{},
                            "reliefF":{},
                            }
     
-    sets = file_all  # file_sets 
+    if control == "all":
+        sets = file_all
+    elif control == "50":
+        sets = file_sets
+    else:
+        sets = file_one
     
     for turn,file in enumerate(sets):
         db = pd.read_csv('../csv/' + file + '.csv')
         print('open file ','../csv/' + file + '.csv')
         
-        # Preprocessing
+        # Preprocessingm
         # Imputation of missing values
         db_values = db.values
         instance_db = db_values[:, 4:-4]
@@ -393,7 +442,22 @@ def run_method(feature_percentage, run_turn):
         scaler.fit(instance_db)
         instance_db = scaler.transform(instance_db)
         db_values[:, 4:-4] = instance_db
-        db = pd.DataFrame(db_values,columns = db.columns)
+        db = pd.DataFrame(db_values, columns = db.columns)
+        
+        # load parameter
+        if control == "all":
+            para_mlpc = 9
+            para_rf = 16
+            para_mlp = 13
+        elif control == "50":
+            para_mlpc = 9
+            para_rf = 16
+            para_mlp = 13
+        else:
+            para_mlpc = 4
+            para_rf = 5
+            para_mlp = 4
+        
         
         # target 
         target_db = db_values[:, -4:]
@@ -418,23 +482,35 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_load)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_load, para_mlp=para_mlp)
         y_test_regr_predict_load["linearR_un"] += linear_result
         y_test_regr_predict_load["svr_un"] += svr_result
         y_test_regr_predict_load["mlp_un"] += mlp_result
         y_test_regr_load["None"] += y_test
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "linearR", "None", time_linear]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "svr", "None", time_svr]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "mlp", "None", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "linearR", "None", linear_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "svr", "None", svr_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "mlp", "None", mlp_result[i]-y_test[i]]
+            
         
         # classification process
         count = Counter(levels_load)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_load)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_load)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svm, time_log, time_rf, time_mlpc = classification(instance_data, levels_load, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_load["svm_un"] += svm_result
             y_test_cla_predict_load["logisticR_un"] += log_result
             y_test_cla_predict_load["rf_un"] += rf_result
             y_test_cla_predict_load["mlpC_un"] += mlp_result
             y_test_cla_load["None"] += y_test
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "svm", "None", time_svm]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "logisticR", "None", time_log]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "rf", "None", time_rf]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "mlpc", "None", time_mlpc]
     
         # load scores lasso
         print('load scores lasso')
@@ -444,23 +520,34 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_load["lasso"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_load)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_load, para_mlp=para_mlp)
         y_test_regr_predict_load["linearR_lasso"] += linear_result
         y_test_regr_predict_load["svr_lasso"] += svr_result
         y_test_regr_predict_load["mlp_lasso"] += mlp_result
         y_test_regr_load["lasso"] += y_test
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "linearR", "lasso", time_linear]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "svr", "lasso", time_svr]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "mlp", "lasso", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "linearR", "lasso", linear_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "svr", "lasso", svr_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "mlp", "lasso", mlp_result[i]-y_test[i]]
         
-        # classification process
+        # classification prodf_time_load_regr[df_time_load_regr.shape[0]] = [feature_percentage, "linearR", "pearson", time_linear]
         count = Counter(levels_load)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_load)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_load)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_load, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_load["svm_lasso"] += svm_result
             y_test_cla_predict_load["logisticR_lasso"] += log_result
             y_test_cla_predict_load["rf_lasso"] += rf_result
             y_test_cla_predict_load["mlpC_lasso"] += mlp_result
             y_test_cla_load["lasso"] += y_test
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "svm", "lasso", time_svm]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "logisticR", "lasso", time_log]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "rf", "lasso", time_rf]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "mlpc", "lasso", time_mlpc]
         
         # load scores pearson
         print('load scores pearson')
@@ -470,24 +557,35 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_load["pearson"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_load)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_load, para_mlp=para_mlp)
         y_test_regr_predict_load["linearR_pearson"] += linear_result
         y_test_regr_predict_load["svr_pearson"] += svr_result
         y_test_regr_predict_load["mlp_pearson"] += mlp_result
         y_test_regr_load["pearson"] += y_test
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "linearR", "pearson", time_linear]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "svr", "pearson", time_svr]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "mlp", "pearson", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "linearR", "pearson", linear_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "svr", "pearson", svr_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "mlp", "pearson", mlp_result[i]-y_test[i]]
         
         # classification process
         count = Counter(levels_load)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_load)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_load)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_load, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_load["svm_pearson"] += svm_result
             y_test_cla_predict_load["logisticR_pearson"] += log_result
             y_test_cla_predict_load["rf_pearson"] += rf_result
             y_test_cla_predict_load["mlpC_pearson"] += mlp_result
             y_test_cla_load["pearson"] += y_test
-        
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "svm", "pearson", time_svm]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "logisticR", "pearson", time_log]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "rf", "pearson", time_rf]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "mlpc", "pearson", time_mlpc]
+            
         # load levels reliefF
         print('load levels reliefF')
         instance_data = db[feature]
@@ -496,26 +594,51 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_load["reliefF"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_load)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_load, para_mlp=para_mlp)
         y_test_regr_predict_load["linearR_reliefF"] += linear_result
         y_test_regr_predict_load["svr_reliefF"] += svr_result
         y_test_regr_predict_load["mlp_reliefF"] += mlp_result
         y_test_regr_load["reliefF"] += y_test
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "linearR", "reliefF", time_linear]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "svr", "reliefF", time_svr]
+        df_time_load_regr.loc[df_time_load_regr.shape[0]] = [feature_percentage, "mlp", "reliefF", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "linearR", "reliefF", linear_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "svr", "reliefF", svr_result[i]-y_test[i]]
+            df_mse_load_regr.loc[df_mse_load_regr.shape[0]] = [feature_percentage, "mlp", "reliefF", mlp_result[i]-y_test[i]]
         
         # classification processcount = Counter(levels_load)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_load)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_load)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_load, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_load["svm_reliefF"] += svm_result
             y_test_cla_predict_load["logisticR_reliefF"] += log_result
             y_test_cla_predict_load["rf_reliefF"] += rf_result
             y_test_cla_predict_load["mlpC_reliefF"] += mlp_result
             y_test_cla_load["reliefF"] += y_test
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "svm", "reliefF", time_svm]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "logisticR", "reliefF", time_log]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "rf", "reliefF", time_rf]
+            df_time_load_cla.loc[df_time_load_cla.shape[0]] = [feature_percentage, "mlpc", "reliefF", time_mlpc]
+        
+        # load parameter
+        if control == "all":
+            para_mlpc = 6
+            para_rf = 14
+            para_mlp = 6
+        elif control == "50":
+            para_mlpc = 6
+            para_rf = 14
+            para_mlp = 6
+        else:
+            para_mlpc = 4
+            para_rf = 5
+            para_mlp = 4
         
         # performance scores as target
         scores_perf = target_db[:, 2]
-        
+
         # aggregate load scores
         scores_perf_aggre = scores_perf_aggre + list(scores_perf)
         
@@ -532,24 +655,35 @@ def run_method(feature_percentage, run_turn):
         # instance_data = db[select_perf]
         instance_data = db[feature]
         
-        # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_perf)
+        # regression process      
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_perf, para_mlp=para_mlp)
         y_test_regr_predict_perf["linearR_un"] += linear_result
         y_test_regr_predict_perf["svr_un"] += svr_result
         y_test_regr_predict_perf["mlp_un"] += mlp_result
         y_test_regr_perf["None"] += y_test
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "linearR", "None", time_linear]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "svr", "None", time_svr]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "mlp", "None", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "linearR", "None", linear_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "svr", "None", svr_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "mlp", "None", mlp_result[i]-y_test[i]]
         
-        # classification process
+        # classification processhape[0]
         count = Counter(levels_perf)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_perf)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_perf)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svm, time_log, time_rf, time_mlpc = classification(instance_data, levels_perf, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_perf["svm_un"] += svm_result
             y_test_cla_predict_perf["logisticR_un"] += log_result
             y_test_cla_predict_perf["rf_un"] += rf_result
             y_test_cla_predict_perf["mlpC_un"] += mlp_result
             y_test_cla_perf["None"] += y_test
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "svm", "None", time_svm]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "logisticR", "None", time_log]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "rf", "None", time_rf]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "mlpc", "None", time_mlpc]
         
         # performance scores lasso
         print('performance scores lasso')
@@ -559,23 +693,34 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_perf["lasso"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_perf)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_perf, para_mlp=para_mlp)
         y_test_regr_predict_perf["linearR_lasso"] += linear_result
         y_test_regr_predict_perf["svr_lasso"] += svr_result
         y_test_regr_predict_perf["mlp_lasso"] += mlp_result
         y_test_regr_perf["lasso"] += y_test
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "linearR", "lasso", time_linear]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "svr", "lasso", time_svr]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "mlp", "lasso", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "linearR", "lasso", linear_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "svr", "lasso", svr_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "mlp", "lasso", mlp_result[i]-y_test[i]]
         
         # classification process
         count = Counter(levels_perf)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
-        _select = len(set(balance)) > 1
+        _select = len(set(balance)) > 1      
         if len(set(levels_perf)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_perf)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_perf, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_perf["svm_lasso"] += svm_result
             y_test_cla_predict_perf["logisticR_lasso"] += log_result
             y_test_cla_predict_perf["rf_lasso"] += rf_result
             y_test_cla_predict_perf["mlpC_lasso"] += mlp_result
             y_test_cla_perf["lasso"] += y_test
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "svm", "lasso", time_svm]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "logisticR", "lasso", time_log]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "rf", "lasso", time_rf]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "mlpc", "lasso", time_mlpc]
         
         # performance scores pearson
         print('performance scores pearson')
@@ -585,23 +730,34 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_perf["pearson"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_perf)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_perf, para_mlp=para_mlp)
         y_test_regr_predict_perf["linearR_pearson"] += linear_result
         y_test_regr_predict_perf["svr_pearson"] += svr_result
         y_test_regr_predict_perf["mlp_pearson"] += mlp_result
         y_test_regr_perf["pearson"] += y_test
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "linearR", "pearson", time_linear]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "svr", "pearson", time_svr]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "mlp", "pearson", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "linearR", "pearson", linear_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "svr", "pearson", svr_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "mlp", "pearson", mlp_result[i]-y_test[i]]
         
         # classification process
         count = Counter(levels_perf)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_perf)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_perf)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_perf, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_perf["svm_pearson"] += svm_result
             y_test_cla_predict_perf["logisticR_pearson"] += log_result
             y_test_cla_predict_perf["rf_pearson"] += rf_result
             y_test_cla_predict_perf["mlpC_pearson"] += mlp_result
             y_test_cla_perf["pearson"] += y_test
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "svm", "pearson", time_svm]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "logisticR", "pearson", time_log]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "rf", "pearson", time_rf]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "mlpc", "pearson", time_mlpc]
     
         # performance levels reliefF
         print('performance levels reliefF')
@@ -611,23 +767,34 @@ def run_method(feature_percentage, run_turn):
         instance_data = db[feature_select_perf["reliefF"][turn]]
         
         # regression process
-        linear_result, svr_result, mlp_result, y_test = regression(instance_data, scores_perf)
+        linear_result, svr_result, mlp_result, y_test, time_linear, time_svr, time_mlp = regression(instance_data, scores_perf, para_mlp=para_mlp)
         y_test_regr_predict_perf["linearR_reliefF"] += linear_result
         y_test_regr_predict_perf["svr_reliefF"] += svr_result
         y_test_regr_predict_perf["mlp_reliefF"] += mlp_result
         y_test_regr_perf["reliefF"] += y_test
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "linearR", "reliefF", time_linear]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "svr", "reliefF", time_svr]
+        df_time_perf_regr.loc[df_time_perf_regr.shape[0]] = [feature_percentage, "mlp", "reliefF", time_mlp]
+        for i in range(len(y_test)):
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "linearR", "reliefF", linear_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "svr", "reliefF", svr_result[i]-y_test[i]]
+            df_mse_perf_regr.loc[df_mse_perf_regr.shape[0]] = [feature_percentage, "mlp", "reliefF", mlp_result[i]-y_test[i]]
         
         # classification process
         count = Counter(levels_perf)
         balance = np.array([count[i] for i in count])/len(levels_load) > 0.1
         _select = len(set(balance)) > 1
         if len(set(levels_perf)) > 1 and _select:
-            svm_result, log_result, rf_result, mlp_result, y_test = classification(instance_data, levels_perf)
+            svm_result, log_result, rf_result, mlp_result, y_test, time_svc, time_log, time_rf, time_mlpc = classification(instance_data, levels_perf, para_rf=para_rf, para_mlpc=para_mlpc)
             y_test_cla_predict_perf["svm_reliefF"] += svm_result
             y_test_cla_predict_perf["logisticR_reliefF"] += log_result
             y_test_cla_predict_perf["rf_reliefF"] += rf_result
             y_test_cla_predict_perf["mlpC_reliefF"] += mlp_result
             y_test_cla_perf["reliefF"] += y_test
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "svm", "reliefF", time_svm]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "logisticR", "reliefF", time_log]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "rf", "reliefF", time_rf]
+            df_time_perf_cla.loc[df_time_perf_cla.shape[0]] = [feature_percentage, "mlpc", "reliefF", time_mlpc]
         
     # common feature selected
     save_path = "../pkl/select_feature/"+"select_feature-" + "f_percentage-" + str(feature_percentage) + "-run_turn-" + str(run_turn) + ".pkl"
@@ -636,14 +803,21 @@ def run_method(feature_percentage, run_turn):
     pkl.dump(dump_data, output)
     output.close()
     """
-    set_num = len(sets)
+    set_num = len(sets)plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="evaluation", y="value", hue="cla_method", kind="bar", legend=False, size=8, data=df_perf_cla_un)
+    plt.legend(loc=0)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=14)
+    plt.savefig("../plot/result/histogram/" + "perf_classification_evaluate")
     sets = [set(feature_select_load["lasso"][i]) for i in range(set_num)]
     feature_select_load["lasso"][set_num] = set.intersection(*sets)
     sets = [set(feature_select_perf["lasso"][i]) for i in range(set_num)]
     feature_select_perf["lasso"][set_num] = set.intersection(*sets)
     sets = [set(feature_select_load["pearson"][i]) for i in range(set_num)]
     feature_select_load["pearson"][set_num] = set.intersection(*sets)
-    sets = [set(feature_select_perf["pearson"][i]) for i in range(set_num)]
+    sets = [set(feature_select_perf["pearson"][i]) for i in range(set_num)]r
     feature_select_perf["pearson"][set_num] = set.intersection(*sets)
     sets = [set(feature_select_load["reliefF"][i]) for i in range(set_num)]
     feature_select_load["reliefF"][set_num] = set.intersection(*sets)
@@ -652,7 +826,14 @@ def run_method(feature_percentage, run_turn):
     """
     
     # plot aggregate summary
-    """
+    """plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="evaluation", y="value", hue="cla_method", kind="bar", legend=False, size=8, data=df_perf_cla_un)
+    plt.legend(loc=0)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=14)
+    plt.savefig("../plot/result/histogram/" + "perf_classification_evaluate")
     denominator = 53522
     plot_hist(scores_load_aggre, (7, 5), "load score", "# of load score", 20,"histograph_of_load_scores",0.65,"percentage")
     plot_hist(levels_load_aggre, (5, 5), "load level", "# of load level",4,"histograph_of_load_levels",0.7,"percentage")
@@ -819,6 +1000,8 @@ def run_method(feature_percentage, run_turn):
 
 # main program here
 if  __name__ == '__main__':
+    # global df_time_load_cla, df_time_load_regr, df_time_perf_cla, df_time_perf_regr
+    # global df_mse_load_regr, df_mse_perf_regr
     method_r = ["linearR", "svr", "mlp"]
     method_c = ["svm", "logisticR", "rf", "mlpC"]
     feature_sel = ["None", "lasso", "pearson", "reliefF"]
@@ -826,9 +1009,9 @@ if  __name__ == '__main__':
     evaluation_c = ["precision", "recall", "fscore"]
     d_r = ["feature_percentage", "regr_method", "feature_select", "evaluation", "value",]
     d_c = ["feature_percentage", "cla_method", "feature_select",  "evaluation", "value",]
-    percentage = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #  
+    percentage = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
-    pkl_path = "../pkl/Dataframe_save.pkl"
+    pkl_path = "../pkl/dataframe_load/Dataframe_save.pkl"
     if not os.path.exists(pkl_path):
         df_load_regr = pd.DataFrame(columns=d_r)
         df_load_cla = pd.DataFrame(columns=d_c)
@@ -854,7 +1037,8 @@ if  __name__ == '__main__':
                                              load_cla_valuate[m1][f1][e1],]
                             df_perf_cla.loc[df_perf_cla.shape[0]] = [percen, m1, feature_sel[f1], evaluation_c[e1],\
                                              perf_cla_valuate[m1][f1][e1],]
-        
+            
+            
         df_load_regr_un = df_load_regr[df_load_regr["feature_select"].isin(["None"])]
         df_load_cla_un = df_load_cla[df_load_cla["feature_select"].isin(["None"])]
         df_perf_regr_un = df_perf_regr[df_perf_regr["feature_select"].isin(["None"])]
@@ -862,43 +1046,90 @@ if  __name__ == '__main__':
         
         output = open(pkl_path, 'wb')
         dump_data = (df_load_regr, df_load_cla, df_perf_regr, df_perf_cla,\
-                     df_load_regr_un, df_load_cla_un, df_perf_regr_un, df_perf_cla_un,)
+                     df_load_regr_un, df_load_cla_un, df_perf_regr_un, df_perf_cla_un,\
+                     df_time_load_cla, df_time_load_regr, df_time_perf_cla, df_time_perf_regr,\
+                     df_mse_load_regr, df_mse_perf_regr,)
         pkl.dump(dump_data, output)
         output.close()
     else:
         output = open(pkl_path, 'rb')
-        df_load_regr, df_load_cla, df_perf_regr, df_perf_cla, df_load_regr_un, df_load_cla_un, df_perf_regr_un, df_perf_cla_un,\
+        df_load_regr, df_load_cla, df_perf_regr, df_perf_cla,\
+        df_load_regr_un, df_load_cla_un, df_perf_regr_un, df_perf_cla_un,\
+        df_time_load_cla, df_time_load_regr, df_time_perf_cla, df_time_perf_regr,\
+        df_mse_load_regr, df_mse_perf_regr,\
            = pkl.load(output)
         output.close()
     
     # tendency plot                  
     plt.figure(figsize=(8,35))
     sbn.set_style("whitegrid")
-    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="evaluation", ci=None, legend=True, data=df_load_regr, kind="point", dodge=True, size=8, aspect=2)
+    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_load_regr[df_load_regr["evaluation"].isin(["MSE"])], kind="point", dodge=True, size=8, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=2)
-    plt.savefig("../plot/result/tendency/" + "load_regression_evaluate")
+    plt.savefig("../plot/result/tendency/" + "load_regression_MSE")
     
     plt.figure(figsize=(8,35))
     sbn.set_style("whitegrid")
-    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="evaluation", ci=None, legend=True, data=df_load_cla, kind="point", dodge=True, size=8, aspect=2)
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["precision"])], kind="point", dodge=True, size=8, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=1.7)
-    plt.savefig("../plot/result/tendency/" + "load_classification_evaluate")
+    plt.savefig("../plot/result/tendency/" + "load_classification_precision")
     
     plt.figure(figsize=(8,35))
     sbn.set_style("whitegrid")
-    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="evaluation", ci=None, legend=True, data=df_perf_regr, kind="point", dodge=True, size=8, aspect=2)
+    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_perf_regr[df_perf_regr["evaluation"].isin(["MSE"])], kind="point", dodge=True, size=8, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=2)
-    plt.savefig("../plot/result/tendency/" + "perf_regression_evaluate")
+    plt.savefig("../plot/result/tendency/" + "perf_regression_MSE")
     
     plt.figure(figsize=(8,35))
     sbn.set_style("whitegrid")
-    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="evaluation", ci=None, legend=True, data=df_perf_cla, kind="point", dodge=True, size=8, aspect=2)
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["precision"])], kind="point", dodge=True, size=8, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=2)
-    plt.savefig("../plot/result/tendency/" + "perf_classification_evaluate")
+    plt.savefig("../plot/result/tendency/" + "perf_classification_precision")
+    
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_load_regr[df_load_regr["evaluation"].isin(["R2"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=2)
+    plt.savefig("../plot/result/tendency/" + "load_regression_R2")
+    
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["recall"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    plt.savefig("../plot/result/tendency/" + "load_classification_recall")
+    
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_perf_regr[df_perf_regr["evaluation"].isin(["R2"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=2)
+    plt.savefig("../plot/result/tendency/" + "perf_regression_R2")
+
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["recall"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=2)
+    plt.savefig("../plot/result/tendency/" + "perf_classification_recall")
+    
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["fscore"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    plt.savefig("../plot/result/tendency/" + "load_classification_fscore")
+    
+    plt.figure(figsize=(8,35))
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["fscore"])], kind="point", dodge=True, size=8, aspect=2)
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=2)
+    plt.savefig("../plot/result/tendency/" + "perf_classification_fscore")
     
     # histogram plot
     plt.figure(figsize=(8,6))
@@ -935,31 +1166,70 @@ if  __name__ == '__main__':
     plt.yticks(np.arange(0, 1.5, 0.1), fontsize=14)
     plt.savefig("../plot/result/histogram/" + "perf_classification_evaluate")
     
+    # consumed time plot
+    plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=8, data=df_time_load_regr)
+    plt.legend(loc=0)
+    plt.savefig("../plot/consumed_time/" + "load_regression_time")
     
+    plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=8, data=df_time_load_cla)
+    plt.legend(loc=0)
+    plt.savefig("../plot/consumed_time/" + "load_classification_time")
     
-        
+    plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=8, data=df_time_perf_regr)
+    plt.legend(loc=0)
+    plt.savefig("../plot/consumed_time/" + "perf_regression_time")
     
+    plt.figure(figsize=(8,6))
+    plt.tight_layout(pad=3)
+    sbn.set(font_scale=1.7)
+    sbn.set_style("whitegrid")
+    sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=8, data=df_time_perf_cla)
+    plt.legend(loc=0)
+    plt.savefig("../plot/consumed_time/" + "perf_classification_time")
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    # mse cdf plot
+    for percen in percentage:
+        for m in method_r:
+            for sel in feature_sel:
+                _data = df_mse_load_regr[df_mse_load_regr["feature_percentage"].isin([percen]) & df_mse_load_regr["regr_method"].isin([m]) & df_mse_load_regr["feature_select"].isin([sel])]
+                datas = _data["mse"].values
+                datas = np.asarray(datas).astype(float)
+                kde = sm.nonparametric.KDEUnivariate(datas)
+                kde.fit()
+                fig = plt.figure(figsize=(12,8))
+                ax = fig.add_subplot(111)
+                ax.hist(datas, bins=50, normed=True, color='red')
+                ax.plot(kde.support, kde.density, lw=2, color='black')
+                save_path = "../plot/result_mse_cdf/load/" + str(percen) + "/" + str(m) + "/"
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                fig.savefig(save_path + str(sel))
+                
+    for percen in percentage:
+        for m in method_r:
+            for sel in feature_sel:
+                _data = df_mse_perf_regr[df_mse_perf_regr["feature_percentage"].isin([percen]) & df_mse_perf_regr["regr_method"].isin([m]) & df_mse_perf_regr["feature_select"].isin([sel])]
+                datas = _data["mse"].values
+                datas = np.asarray(datas).astype(float)
+                kde = sm.nonparametric.KDEUnivariate(datas)
+                kde.fit()
+                fig = plt.figure(figsize=(12,8))
+                ax = fig.add_subplot(111)
+                ax.hist(datas, bins=50, normed=True, color='red')
+                ax.plot(kde.support, kde.density, lw=2, color='black')
+                save_path = "../plot/result_mse_cdf/perf/" + str(percen) + "/" + str(m) + "/"
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                fig.savefig(save_path + str(sel))

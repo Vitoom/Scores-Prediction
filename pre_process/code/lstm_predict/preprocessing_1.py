@@ -339,7 +339,7 @@ class NeuralNetwork():
             if len(set(to_list(y_train))) > 1 :
                 break;
         # create and fit the NN model
-        model_save_path = self.model_save_dir + "/" + self.model_file_prefix + "-" + ".h5"
+        model_save_path = self.model_save_dir + "/" + self.model_file_prefix + ".h5"
         # check if model file exists
         if not os.path.exists(model_save_path) or override:
             score = self.NN_model_train(x_train, y_train, x_val, y_val, model_save_path=model_save_path, end=end, lookback=lookback)
@@ -360,7 +360,7 @@ class NeuralNetwork():
 # look back dataset
 def create_interval_dataset(dataset, lookback_num):
     """
-    :param dataset: input array of time intervals
+    :param dataset: input array of time intervals + '-'
     :param look_back: each training set feature length
     :return: convert an array of values into a dataset matrix. create_interval_dataset
     """
@@ -401,7 +401,7 @@ def lstm_predict(dataX, dataY, end, lookback):
     output_dir = "./cluster_lstm_model"                                        # "/your_local_path/RNN_prediction_2/cluster_lstm_model"
     training_set_length = 50
     dense_layer = 2
-    model_file_prefix = 'model-' + "lookback-" + str(lookback) + '-' 
+    model_file_prefix = 'model-' + "lookback-" + str(lookback) 
     model_save_dir = output_dir + "/" + model_file_prefix
     obj_NN = NeuralNetwork(output_dir=output_dir,
                            model_save_dir=model_save_dir,
@@ -415,7 +415,7 @@ def lstm_predict(dataX, dataY, end, lookback):
 if __name__ == '__main__':
     sets = file_sets # file_one
     
-    lookback_set = list(range(3, 16, 1))
+    lookback_set = list(range(31, 52, 2))
 
     evaluate = np.zeros( (len(lookback_set), 3) )
 
