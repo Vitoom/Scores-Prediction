@@ -91,7 +91,7 @@ global db
 
 global denominator
 
-control = "one"
+control = "all"
 
 columns_time = ["feature_percentage", "method", "feature_selection", "time(s)",]
 df_time_load_cla = pd.DataFrame(columns=columns_time)
@@ -1073,6 +1073,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["precision"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "load_classification_precision")
     
     plt.figure(figsize=(8,35))
@@ -1087,6 +1088,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["precision"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "perf_classification_precision")
     
     plt.figure(figsize=(8,35))
@@ -1094,6 +1096,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_load_regr[df_load_regr["evaluation"].isin(["R2"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "load_regression_R2")
     
     plt.figure(figsize=(8,35))
@@ -1101,6 +1104,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["recall"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "load_classification_recall")
     
     plt.figure(figsize=(8,35))
@@ -1108,6 +1112,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="regr_method", col="feature_select", ci=None, legend=True, data=df_perf_regr[df_perf_regr["evaluation"].isin(["R2"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "perf_regression_R2")
 
     plt.figure(figsize=(8,35))
@@ -1115,6 +1120,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["recall"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "perf_classification_recall")
     
     plt.figure(figsize=(8,35))
@@ -1122,6 +1128,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_load_cla[df_load_cla["evaluation"].isin(["fscore"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "load_classification_fscore")
     
     plt.figure(figsize=(8,35))
@@ -1129,6 +1136,7 @@ if  __name__ == '__main__':
     sbn.factorplot(x="feature_percentage", y="value", hue="cla_method", col="feature_select", ci=None, legend=True, data=df_perf_cla[df_perf_cla["evaluation"].isin(["fscore"])], kind="point", dodge=True, size=16, aspect=2)
     plt.tight_layout(pad=3)
     sbn.set(font_scale=5)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/tendency/" + "perf_classification_fscore")
     
     # histogram plot
@@ -1146,7 +1154,7 @@ if  __name__ == '__main__':
     sbn.set_style("whitegrid")
     sbn.factorplot(x="evaluation", y="value", hue="cla_method", kind="bar", legend=False, size=16, data=df_load_cla_un)
     plt.legend(loc=0)
-    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=14)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/histogram/" + "load_classification_evaluate")
     
     plt.figure(figsize=(8,6))
@@ -1163,7 +1171,7 @@ if  __name__ == '__main__':
     sbn.set_style("whitegrid")
     sbn.factorplot(x="evaluation", y="value", hue="cla_method", kind="bar", legend=False, size=16, data=df_perf_cla_un)
     plt.legend(loc=0)
-    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=14)
+    plt.yticks(np.arange(0, 1.5, 0.1), fontsize=22)
     plt.savefig("../plot/result/histogram/" + "perf_classification_evaluate")
     
     # consumed time plot
