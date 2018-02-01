@@ -1009,9 +1009,9 @@ if  __name__ == '__main__':
     evaluation_c = ["precision", "recall", "fscore"]
     d_r = ["feature_percentage", "regr_method", "feature_select", "evaluation", "value",]
     d_c = ["feature_percentage", "cla_method", "feature_select",  "evaluation", "value",]
-    percentage = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    percentage = [0.1, 0.2, 0.3, 0.4,]
     
-    pkl_path = "../pkl/dataframe_load/Dataframe_save.pkl"
+    pkl_path = "../pkl/dataframe_load_one/Dataframe_save.pkl"
     if not os.path.exists(pkl_path):
         df_load_regr = pd.DataFrame(columns=d_r)
         df_load_cla = pd.DataFrame(columns=d_c)
@@ -1177,7 +1177,7 @@ if  __name__ == '__main__':
     # consumed time plot
     plt.figure(figsize=(8,6))
     plt.tight_layout(pad=3)
-    sbn.set(font_scale=5)
+    sbn.set(font_scale=1.7)
     sbn.set_style("whitegrid")
     sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=16, data=df_time_load_regr)
     plt.legend(loc=0)
@@ -1185,7 +1185,7 @@ if  __name__ == '__main__':
     
     plt.figure(figsize=(8,6))
     plt.tight_layout(pad=3)
-    sbn.set(font_scale=5)
+    sbn.set(font_scale=1.7)
     sbn.set_style("whitegrid")
     sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=16, data=df_time_load_cla)
     plt.legend(loc=0)
@@ -1193,7 +1193,7 @@ if  __name__ == '__main__':
     
     plt.figure(figsize=(8,6))
     plt.tight_layout(pad=3)
-    sbn.set(font_scale=5)
+    sbn.set(font_scale=1.7)
     sbn.set_style("whitegrid")
     sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=16, data=df_time_perf_regr)
     plt.legend(loc=0)
@@ -1201,7 +1201,7 @@ if  __name__ == '__main__':
     
     plt.figure(figsize=(8,6))
     plt.tight_layout(pad=3)
-    sbn.set(font_scale=5)
+    sbn.set(font_scale=1.7)
     sbn.set_style("whitegrid")
     sbn.factorplot(x="feature_percentage", y="time(s)", hue="method", col="feature_selection", kind="point", legend=False, size=16, data=df_time_perf_cla)
     plt.legend(loc=0)

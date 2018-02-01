@@ -826,7 +826,7 @@ if  __name__ == '__main__':
     evaluation_c = ["precision", "recall", "fscore"]
     d_r = ["feature_percentage", "regr_method", "feature_select", "evaluation", "value",]
     d_c = ["feature_percentage", "cla_method", "feature_select",  "evaluation", "value",]
-    percentage = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #  0.1, 0.2, 0.3, 0.4, 
+    percentage = [0.1, 0.2, 0.3, 0.4,] #   
     
     pkl_path = "../pkl/Dataframe_save.pkl"
     if not os.path.exists(pkl_path):
