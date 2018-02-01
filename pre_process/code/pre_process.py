@@ -91,7 +91,7 @@ global db
 
 global denominator
 
-control = "all"
+control = "one"
 
 columns_time = ["feature_percentage", "method", "feature_selection", "time(s)",]
 df_time_load_cla = pd.DataFrame(columns=columns_time)
@@ -454,9 +454,9 @@ def run_method(feature_percentage, run_turn):
             para_rf = 16
             para_mlp = 13
         else:
-            para_mlpc = 4
-            para_rf = 5
-            para_mlp = 4
+            para_mlpc = 9
+            para_rf = 16
+            para_mlp = 13
         
         
         # target 
@@ -632,9 +632,9 @@ def run_method(feature_percentage, run_turn):
             para_rf = 14
             para_mlp = 6
         else:
-            para_mlpc = 4
-            para_rf = 5
-            para_mlp = 4
+            para_mlpc = 6
+            para_rf = 14
+            para_mlp = 6
         
         # performance scores as target
         scores_perf = target_db[:, 2]
@@ -822,7 +822,7 @@ def run_method(feature_percentage, run_turn):
     sets = [set(feature_select_load["reliefF"][i]) for i in range(set_num)]
     feature_select_load["reliefF"][set_num] = set.intersection(*sets)
     sets = [set(feature_select_perf["reliefF"][i]) for i in range(set_num)]
-    feature_select_perf["reliefF"][set_num] = set.intersection(*sets)
+    feature_select_perf["reliefF"][set_num] = set.intersection(*sets).png")
     """
     
     # plot aggregate summary
@@ -1233,3 +1233,4 @@ if  __name__ == '__main__':
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
                 fig.savefig(save_path + str(sel))
+    # pkl_path = "../pkl/lookback_load/lookback_1-29.pkl"

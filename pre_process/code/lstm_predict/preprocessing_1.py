@@ -96,7 +96,7 @@ select_perf_columns = ['2080020', '2080021', '2080022', '2080023', '2080024', '2
 
 select_perf_columns_one = ['PerfScore',]
 
-num_episodes = 500
+num_episodes = 600
 
 # class definition here
 
@@ -119,7 +119,6 @@ class EpisodeHistory:
         self.plot_episode_count = plot_episode_count
         self.max_value_per_episode = max_value_per_episode
         self.label = label
-        
         self.num_plot = num_plot 
         self.point_plot = {}
         self.fig = None
@@ -136,9 +135,9 @@ class EpisodeHistory:
         self.ax.set_ylim(0, self.max_value_per_episode)
         self.ax.yaxis.grid(True)
         
-        self.ax.set_title(self.title)
-        self.ax.set_xlabel(self.xlabel)
-        self.ax.set_ylabel(self.ylabel)
+        self.ax.set_title(self.title, fontsize=22)
+        self.ax.set_xlabel(self.xlabel, fontsize=22)
+        self.ax.set_ylabel(self.ylabel, fontsize=22)
         
         color_set = ['b', 'g', 'r', 'c']
         for i in range(num_plot):
@@ -163,7 +162,7 @@ class EpisodeHistory:
             self.ax.set_xlim(plot_left_edge, plot_left_edge + self.plot_episode_count)
 
         # Repaint the surface.
-        plt.legend()
+        plt.legend(fontsize=22)
         plt.draw()
         plt.pause(0.0001)
         
@@ -367,10 +366,10 @@ def create_interval_dataset(dataset, lookback_num):
     origin_instance_num = dataset.shape[0]
     instance_num = dataset.shape[0] - lookback_num
     feature_num = dataset.shape[1]
-    dataX = np.zeros( (instance_num, lookback_num, feature_num) )
+    dataX = np.zeros( (instance_num, lookback_num+1, feature_num) )  # weather or not contain the instance now
     dataY = np.zeros(instance_num)
     for i in range(lookback_num, origin_instance_num):
-        for j in range(lookback_num):
+        for j in range(lookback_num+1):              # weather or not contain the instance now
             dataX[i-lookback_num][j][:] = dataset[i-lookback_num+j][:]
         dataY[i-lookback_num] = dataset[i][-1]
     return dataX, dataY
@@ -415,7 +414,7 @@ def lstm_predict(dataX, dataY, end, lookback):
 if __name__ == '__main__':
     sets = file_sets # file_one
     
-    lookback_set = list(range(31, 52, 2))
+    lookback_set = list(range(1, 30, 2))
 
     evaluate = np.zeros( (len(lookback_set), 3) )
 
