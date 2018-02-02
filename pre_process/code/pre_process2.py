@@ -1011,7 +1011,7 @@ if  __name__ == '__main__':
     d_c = ["feature_percentage", "cla_method", "feature_select",  "evaluation", "value",]
     percentage = [0.1, 0.2, 0.3, 0.4, 0.5]
     
-    pkl_path = "../pkl/dataframe_load_one/Dataframe_save.pkl"
+    pkl_path = "../pkl/dataframe_load/Dataframe_save.pkl"
     if not os.path.exists(pkl_path):
         df_load_regr = pd.DataFrame(columns=d_r)
         df_load_cla = pd.DataFrame(columns=d_c)
@@ -1152,7 +1152,7 @@ if  __name__ == '__main__':
     plt.tight_layout(pad=3)
     sbn.set(font_scale=2.5)
     sbn.set_style("whitegrid")
-    sbn.factorplot(x="evaluation", y="value", hue="regr_method", kind="bar", legend=False, size=16, data=df_load_regr_un)
+    sbn.factorplot(x="evaluation", y="value", hue="regr_method", kind="bar", legend=False, size=16, data=df_perf_regr_un)
     plt.legend(loc=0)
     plt.yticks(np.arange(0, 8, 1), fontsize=22)
     plt.savefig("../plot/result/histogram/" + "perf_regression_evaluate")
